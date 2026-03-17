@@ -2,63 +2,105 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Panel</title>
-
+<title>Verificar Código QR</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-body{font-family:Arial;background:#f4f4f4;padding:40px}
-.card{background:white;padding:30px;max-width:400px;margin:auto}
-input,button{width:100%;padding:10px;margin-top:10px}
+body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; margin: 0; }
+.card { background: white; padding: 30px; max-width: 500px; margin: auto; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
+h2 { color: #333; }
+.valido { color: #28a745; font-size: 48px; }
+.invalido { color: #dc3545; font-size: 48px; }
+.usado { color: #ffc107; font-size: 48px; }
+.info { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left; }
+.info p { margin: 8px 0; }
+.label { font-weight: bold; color: #555; }
+button { background: #007bff; color: white; border: none; padding: 15px 30px; font-size: 16px; border-radius: 5px; cursor: pointer; }
+button:hover { background: #0056b3; }
+.hidden { display: none; }
 </style>
 </head>
-
 <body>
 
 <div class="card">
+  <h2>🔍 Verificación de Código QR</h2>
+  
+  <div id="loading">Cargando...</div>
+  
+  <div id="resultado" class="hidden">
+    <div id="icono"></div>
+    <h3 id="mensaje"></h3>
+    <div id="info" class="info hidden"></div>
+  </div>
 
-<h2>Nueva venta</h2>
-
-<input id="cliente" placeholder="Cliente">
-<input id="empresa" placeholder="Empresa">
-<input id="producto" placeholder="Producto">
-
-<button onclick="crear()">Crear</button>
-
-<div id="qr"></div>
-
+  <button onclick="verificar()" id="btnVerificar" class="hidden">Verificar Código</button>
 </div>
 
 <script>
-async function crear(){
+const urlParams = new URLSearchParams(window.location.search);
+const token = urlParams.get('token');
 
-try{
-
-const cliente = document.getElementById("cliente").value;
-const empresa = document.getElementById("empresa").value;
-const producto = document.getElementById("producto").value;
-
-const res = await fetch("/api/nueva-venta",{
-method:"POST",
-headers:{'Content-Type':'application/json'},
-body:JSON.stringify({
-cliente,
-empresa,
-producto
-})
-});
-
-const data = await res.json();
-
-document.getElementById("qr").innerHTML =
-`
-<p>Token: ${data.token}</p>
-<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${data.url}">
-`;
-
-}catch(e){
-console.error(e);
-alert("Error al crear venta");
+if (!token) {
+  document.getElementById('loading').innerHTML = '<p class="invalido">❌</p><p>No se encontró código QR</p>';
+} else {
+  document.getElementById('loading').classList.add('hidden');
+  document.getElementById('resultado').classList.remove('hidden');
+  document.getElementById('btnVerificar').classList.remove('hidden');
 }
 
+async function verificar() {
+  const btn = document.getElementById('btnVerificar');
+  btn.disabled = true;
+  btn.textContent = 'Verificando...';
+
+  try {
+    const res = await fetch("/api/verificar-venta", {
+      method: "POST",
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+
+    const data = await res.json();
+    
+    const icono = document.getElementById('icono');
+    const mensaje = document.getElementById('mensaje');
+    const info = document.getElementById('info');
+
+    if (data.valido) {
+      // ✅ Código válido y usado por primera vez
+      icono.innerHTML = '<div class="valido">✅</div>';
+      mensaje.textContent = data.mensaje;
+      info.innerHTML = `
+        <p><span class="label">Cliente:</span> ${data.venta.cliente}</p>
+        <p><span class="label">Empresa:</span> ${data.venta.empresa}</p>
+        <p><span class="label">Producto:</span> ${data.venta.producto}</p>
+        <p><span class="label">Verificado:</span> ${new Date(data.venta.verificado_en).toLocaleString()}</p>
+      `;
+      info.classList.remove('hidden');
+    } else if (data.venta) {
+      // ⚠️ Ya fue usado
+      icono.innerHTML = '<div class="usado">⚠️</div>';
+      mensaje.textContent = data.mensaje;
+      info.innerHTML = `
+        <p><span class="label">Cliente:</span> ${data.venta.cliente}</p>
+        <p><span class="label">Empresa:</span> ${data.venta.empresa}</p>
+        <p><span class="label">Producto:</span> ${data.venta.producto}</p>
+        <p><span class="label">Usado el:</span> ${new Date(data.venta.verificado_en).toLocaleString()}</p>
+      `;
+      info.classList.remove('hidden');
+    } else {
+      // ❌ No válido
+      icono.innerHTML = '<div class="invalido">❌</div>';
+      mensaje.textContent = data.mensaje || 'Código QR no válido';
+    }
+
+    btn.style.display = 'none';
+
+  } catch (e) {
+    console.error("Error:", e);
+    alert("Error al verificar: " + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Intentar de nuevo';
+  }
 }
 </script>
 
