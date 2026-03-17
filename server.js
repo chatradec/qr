@@ -8,7 +8,7 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// 🗄️ Conexión a Turso (sin await aquí)
+// 🗄️ Conexión a Turso
 const turso = createClient({
   url: process.env.TURSO_DATABASE_URL,
   authToken: process.env.TURSO_AUTH_TOKEN
@@ -18,9 +18,8 @@ const turso = createClient({
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static(__dirname));
 
-// 🗄️ Inicializar tabla (LAZY: solo cuando se usa, NO al cargar el módulo)
+// 🗄️ Inicializar tabla
 async function initDB() {
   try {
     await turso.execute(`
@@ -42,14 +41,14 @@ async function initDB() {
 
 // 🌐 RUTA: Crear venta
 app.post('/api/nueva-venta', async (req, res) => {
-  await initDB(); // ← await DENTRO de la función, no afuera
+  await initDB();
   try {
     const { cliente, empresa, producto } = req.body;
     if (!cliente || !empresa || !producto) {
       return res.status(400).json({ error: 'Faltan campos' });
     }
     const token = crypto.randomBytes(16).toString('hex');
-    const url = `${process.env.FRONTEND_URL || 'https://qr-seven-tau.vercel.app'}/verificar.html?token=${token}`;
+    const url = `${process.env.FRONTEND_URL || 'https://' + req.headers.host}/verificar.html?token=${token}`;
     
     await turso.execute({
       sql: 'INSERT INTO ventas (token, cliente, empresa, producto) VALUES (?, ?, ?, ?)',
@@ -59,11 +58,11 @@ app.post('/api/nueva-venta', async (req, res) => {
     res.status(201).json({ success: true, token, url });
   } catch (err) {
     console.error('❌ Error nueva-venta:', err.message);
-    res.status(500).json({ error: 'Error interno' });
+    res.status(500).json({ error: 'Error interno: ' + err.message });
   }
 });
 
-// 🔍 RUTA: Verificar venta
+// 🔍 RUTA: Verificar venta (USO ÚNICO)
 app.post('/api/verificar-venta', async (req, res) => {
   await initDB();
   try {
@@ -76,16 +75,23 @@ app.post('/api/verificar-venta', async (req, res) => {
     });
     
     const venta = result.rows[0];
-    if (!venta) return res.status(404).json({ success: false, valido: false, mensaje: 'No encontrado' });
+    if (!venta) return res.status(404).json({ success: false, valido: false, mensaje: 'Código QR no válido' });
+    
     if (venta.estado === 'usado') {
       return res.status(400).json({ 
         success: true, 
         valido: false, 
-        mensaje: '⚠️ Ya fue usado',
-        venta: { cliente: venta.cliente, empresa: venta.empresa, producto: venta.producto }
+        mensaje: '⚠️ Este código QR ya fue utilizado',
+        venta: { 
+          cliente: venta.cliente, 
+          empresa: venta.empresa, 
+          producto: venta.producto,
+          verificado_en: venta.verificado_en 
+        }
       });
     }
     
+    // ✅ Marcar como usado (USO ÚNICO)
     const verificadoEn = new Date().toISOString();
     await turso.execute({
       sql: 'UPDATE ventas SET estado = ?, verificado_en = ? WHERE token = ?',
@@ -95,8 +101,13 @@ app.post('/api/verificar-venta', async (req, res) => {
     res.json({ 
       success: true, 
       valido: true, 
-      mensaje: '✅ Verificado',
-      venta: { cliente: venta.cliente, empresa: venta.empresa, producto: venta.producto, verificado_en: verificadoEn }
+      mensaje: '✅ Código QR verificado correctamente',
+      venta: { 
+        cliente: venta.cliente, 
+        empresa: venta.empresa, 
+        producto: venta.producto, 
+        verificado_en: verificadoEn 
+      }
     });
   } catch (err) {
     console.error('❌ Error verificar-venta:', err.message);
@@ -104,7 +115,7 @@ app.post('/api/verificar-venta', async (req, res) => {
   }
 });
 
-// 🔎 RUTA: Consultar venta
+// 🔎 RUTA: Consultar venta (para debug)
 app.get('/api/venta/:token', async (req, res) => {
   await initDB();
   try {
@@ -115,15 +126,18 @@ app.get('/api/venta/:token', async (req, res) => {
     });
     const venta = result.rows[0];
     if (!venta) return res.status(404).json({ error: 'No encontrada' });
-    res.json({ success: true, venta: { ...venta, token } });
+    res.json({ success: true, venta });
   } catch (err) {
     console.error('❌ Error consulta-venta:', err.message);
     res.status(500).json({ error: 'Error interno' });
   }
 });
 
+// 📄 SERVIR ARCHIVOS ESTÁTICOS (IMPORTANTE)
+app.use(express.static(__dirname));
+
 // 🏠 Ruta raíz
-app.get('/', (_, res) => {
+app.get('/', (req, res) => {
   res.sendFile(join(__dirname, 'panel.html'));
 });
 
