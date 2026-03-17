@@ -1,37 +1,29 @@
-import crypto from "crypto";
-import { db } from "../lib/db.js";
+import express from 'express';
+import crypto from 'crypto';
+import { crearVenta } from '../lib/db.js';
 
-export default async function handler(req, res) {
+const router = express.Router();
 
-try {
+router.post('/', async (req, res) => {
+  try {
+    const { cliente, empresa, producto } = req.body;
 
-if(req.method !== "POST"){
-return res.status(405).json({error:"Metodo no permitido"});
-}
+    if (!cliente || !empresa || !producto) {
+      return res.status(400).json({ error: 'Faltan campos obligatorios' });
+    }
 
-const { cliente, empresa, producto } = req.body;
+    const token = crypto.randomBytes(16).toString('hex');
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const url = `${frontendUrl}/verificar.html?token=${token}`;
 
-const token = crypto.randomBytes(16).toString("hex");
+    await crearVenta(token, cliente, empresa, producto);
 
-await db.execute({
-sql: "INSERT INTO ventas(token,cliente,empresa,producto) VALUES(?,?,?,?)",
-args: [token, cliente, empresa, producto],
+    res.status(201).json({ success: true, token, url });
+
+  } catch (error) {
+    console.error('❌ Error en nueva-venta:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
 });
 
-return res.status(200).json({
-ok: true,
-token,
-url: `${req.headers.origin}/verificar.html?token=${token}`,
-});
-
-} catch (e) {
-
-console.error("ERROR REAL:", e);
-
-return res.status(500).json({
-error: e.message
-});
-
-}
-
-}
+export default router;
