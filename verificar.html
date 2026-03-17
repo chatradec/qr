@@ -1,0 +1,54 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<title>Vic-QR</title>
+</head>
+
+<body>
+
+<h1>Validación</h1>
+
+<div id="resultado"></div>
+
+<script>
+
+const token = new URLSearchParams(location.search).get("token");
+
+fetch("/api/verificar?token="+token)
+.then(r=>r.json())
+.then(data=>{
+
+if(!data.ok){
+resultado.innerHTML="QR inválido";
+return;
+}
+
+if(data.usado){
+resultado.innerHTML="QR ya usado";
+return;
+}
+
+resultado.innerHTML=`
+<p>${data.cliente}</p>
+<p>${data.producto}</p>
+<button onclick="confirmar()">Confirmar entrega</button>
+`;
+
+});
+
+function confirmar(){
+
+fetch("/api/confirmar",{
+method:"POST",
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({token})
+})
+.then(()=>location.reload());
+
+}
+
+</script>
+
+</body>
+</html>

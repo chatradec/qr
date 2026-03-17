@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Panel</title>
+
+<style>
+body{font-family:Arial;background:#f4f4f4;padding:40px}
+.card{background:white;padding:30px;max-width:400px;margin:auto}
+input,button{width:100%;padding:10px;margin-top:10px}
+</style>
+</head>
+
+<body>
+
+<div class="card">
+
+<h2>Nueva venta</h2>
+
+<input id="cliente" placeholder="Cliente">
+<input id="empresa" placeholder="Empresa">
+<input id="producto" placeholder="Producto">
+
+<button onclick="crear()">Crear</button>
+
+<div id="qr"></div>
+
+</div>
+
+<script>
+
+async function crear(){
+
+const res = await fetch("/api/nueva-venta",{
+method:"POST",
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({
+cliente:cliente.value,
+empresa:empresa.value,
+producto:producto.value
+})
+});
+
+const data = await res.json();
+
+qr.innerHTML =
+`
+<p>Token: ${data.token}</p>
+<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${data.url}">
+`;
+
+}
+
+</script>
+
+</body>
+</html>
