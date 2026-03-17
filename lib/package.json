@@ -1,7 +1,0 @@
-{
- "name": "vic-qr",
- "type": "module",
- "dependencies": {
-  "@libsql/client": "^0.5.0"
- }
-}
