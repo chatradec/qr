@@ -28,29 +28,38 @@ input,button{width:100%;padding:10px;margin-top:10px}
 </div>
 
 <script>
-
 async function crear(){
+
+try{
+
+const cliente = document.getElementById("cliente").value;
+const empresa = document.getElementById("empresa").value;
+const producto = document.getElementById("producto").value;
 
 const res = await fetch("/api/nueva-venta",{
 method:"POST",
 headers:{'Content-Type':'application/json'},
 body:JSON.stringify({
-cliente:cliente.value,
-empresa:empresa.value,
-producto:producto.value
+cliente,
+empresa,
+producto
 })
 });
 
 const data = await res.json();
 
-qr.innerHTML =
+document.getElementById("qr").innerHTML =
 `
 <p>Token: ${data.token}</p>
 <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${data.url}">
 `;
 
+}catch(e){
+console.error(e);
+alert("Error al crear venta");
 }
 
+}
 </script>
 
 </body>
